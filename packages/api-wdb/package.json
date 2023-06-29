@@ -4,8 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "netlify dev",
-    "build": "netlify build",
-    "deploy": "netlify deploy"
+    "build": "echo building.."
   },
   "dependencies": {
     "@notionhq/client": "^2.2.5"
