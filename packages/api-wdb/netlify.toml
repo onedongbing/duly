@@ -1,3 +1,23 @@
+[dev]
+functions = "netlify/functions"
+functionsPort = 11000
+
 [build]
 command = "npm install"
-functions = "./netlify/functions"
+functions = "netlify/functions"
+
+[[headers]]
+  # Define which paths this specific [[headers]] block will cover.
+  for = "/*"
+
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    Content-Security-Policy = "frame-ancestors https://www.facebook.com"
+
+    # Multi-value headers are expressed with multi-line strings.
+  cache-control = '''
+  max-age=0,
+  no-cache,
+  no-store,
+  must-revalidate'''

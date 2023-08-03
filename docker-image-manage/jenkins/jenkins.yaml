@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jenkins
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jenkins
+  template:
+    metadata:
+      labels:
+        app: jenkins
+    spec:
+      containers:
+        - name: jenkins
+          image: wangdongbing/jenkins:latest
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: jenkins-home
+              mountPath: /var/jenkins_home
+            - name: docker1
+              mountPath: /var/run/docker.sock
+            - name: docker2
+              mountPath: /usr/bin/docker
+            - name: docker3
+              mountPath: /etc/docker
+      volumes:
+        - name: jenkins-home
+          hostPath:
+            path: /var/jenkins_home
+        - name: docker1
+          hostPath:
+            path: /var/run/docker.sock
+        - name: docker2
+          hostPath:
+            path: /usr/bin/docker
+        - name: docker3
+          hostPath:
+            path: /etc/docker
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins
+spec:
+  type: NodePort
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30090
+  selector:
+    app: jenkins
