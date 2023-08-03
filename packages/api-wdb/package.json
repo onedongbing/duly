@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "netlify functions:serve",
-    "build": "echo building.."
+    "link": "netlify link --name api-wdb",
+    "deploy": "netlify deploy --build --prod --dir=public --site=api-wdb"
   },
   "dependencies": {
     "@notionhq/client": "^2.2.5"
