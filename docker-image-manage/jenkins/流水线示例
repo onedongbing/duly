@@ -1,0 +1,136 @@
+is_prod=false
+use_maven=true
+build_dependency=true
+service_list=env.service_list
+services=env.service_list.split(',')
+
+pipeline {
+    agent { label 'devops' }
+    parameters {
+        string(name:'branch', defaultValue: 'master', description: '应用分支')
+        string(name:'api_list', defaultValue: '', description: '依赖项列表，若没有则留空，逗号隔开，')
+        string(name:'service_list', defaultValue: '', description: '服务列表，逗号隔开')
+        string(name: 'nsname', defaultValue: '', description: '目标环境')
+        booleanParam(name: 'ut_check', defaultValue: 'false', description: '是否运行单测')
+        booleanParam(name: 'check_merged_master', defaultValue: 'false', description: '是否检查分支已合并master，上线分支强制检查')
+        booleanParam(name: 'add_jacoco', defaultValue: 'false', description: '是否添加jacoco')
+        booleanParam(name: 'env_manage', defaultValue: 'false', description: '是否启用开发环境治理功能')
+        string(name:'ops_script_branch', defaultValue: 'master', description: '运维脚本分支')
+    }
+    options {
+        timestamps()
+    }
+    environment {
+        pip_url="https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple/"
+    }
+
+    stages {
+        stage('前置操作'){
+            steps{
+                timeout(time: 60, unit: 'MINUTES'){
+                    script{
+                        buildName "#${currentBuild.number} $nsname $branch"
+                        buildDescription "API: $api_list \nService: $service_list"
+
+                        apis=env.api_list.split(',')
+                        service_list=env.service_list
+                        services=env.service_list.split(',')
+    
+                        println("[INFO] branch: " + branch)
+                        println("[INFO] apis: " + apis)
+                        println("[INFO] services: " + services)
+                        println("[INFO] environment: " + nsname)
+                        println("[INFO] ut_check: " + ut_check)
+                        println("[INFO] check_merged_master: " + check_merged_master)
+                        println("[INFO] ops_branch: " + ops_script_branch)
+                        println("[INFO] is_prod: " + is_prod)
+                    }
+                }
+            }
+        }
+
+        stage('Check ENV Manage'){
+            steps{
+                script{
+                    sh """
+                        if [[ ( "$nsname" == dev5[1-9] || "$nsname" == dev[6-9][0-9] || "$nsname" == dev100 || "$nsname" =~ sitxt(1[0-4][0-9]|150) ) && "$env_manage" == false ]]; then
+                            echo "[ERROR] $nsname 环境属于环境治理，需勾选env_manage"
+                            exit 1
+                        fi
+                    """
+                }
+            }
+        }
+
+        stage('check Branch'){
+            steps{
+                script{
+                    sh label: '', script: "cd $WORKSPACE && cp -r devops /"
+
+                    if (nsname == "sitxtai"){
+                        error("禁止向算法集群部署服务")
+                    }
+
+                    if (check_merged_master == "true"){
+                        // check api
+                        for (api in apis) {
+                            println("[INFO] Check if merged master: $api")
+                            sh label: '', script: "bash /devops/script/codemgt/checkBranchMergedMaster.sh -s $branch -p $api"
+                        }
+
+                        // check service
+                        sh label: '', script: "bash /devops/script/codemgt/checkBranchBeforeBuild.sh -b $branch -P $is_prod -S $service_list"
+                    }
+                }
+            }
+
+        }
+
+        stage('Check Parent API'){
+            steps{
+                script{
+                    sh "pip install -r /devops/script/pythonfile/requirements.txt -i ${pip_url}"
+                    for(int i=0; i<services.size(); ++i){
+                    def service=services[i]
+                    println service
+                    def networkStatus=""
+                    def repoName=sh(script: "export LANG=en_US.UTF-8 && python3 /devops/script/pythonfile/devops_cli.py extract-repo-from-service-api -s ${service}", returnStdout: true).trim()
+                    networkStatus=sh(script: "python3 /devops/script/pythonfile/devops_cli.py solve-infra-problem-api -r ${repoName} -b ${branch}", returnStatus: true)
+                    println "networkStatus"
+                    println networkStatus
+                    if(networkStatus!=0){
+                        throw new Exception("The service : ${service} 的部署脚本失败,请查看日志!!!!!")
+                    }
+                    }
+                }
+            }
+        }
+
+        stage('Build dependency'){
+            steps{
+                script{
+                    sh label: '', script: "bash /devops/script/deploy/build_dependency.sh -B $branch -S '$api_list' -P $is_prod -M $use_maven -m $check_merged_master"
+                }
+            }
+
+        }
+        stage('Deploy service'){
+            steps{
+                timeout(time: 120, unit: 'MINUTES'){
+                    script{
+                        withCredentials([usernamePassword(credentialsId: 'ATTA_SR_TEST', usernameVariable: 'ATTA_SRT_AKID_TEST', passwordVariable: 'ATTA_SRT_SECRET_TEST')]) {
+                            sh label: '', script: "bash /devops/script/deploy/k8s_setup.sh -S $service_list -B origin/$branch -P $is_prod -C $nsname -D $build_dependency -U $ut_check -m $check_merged_master -J $add_jacoco -G $env_manage"
+                        }
+                    }
+                }
+                script{
+                    // 修改算法服务集群配置，使用本地算法，方法内会自动检测是否有算法服务
+                    sh "pip install pymongo pandas click -i http://mirrors.aliyun.com/pypi/simple/  --trusted-host mirrors.aliyun.com"
+                    sh "python3 /devops/script/ai/data_sync.py set-ai-service-mode -t ${nsname} -m local -s ${service_list}"
+                }
+            }
+
+        }
+        
+    }
+}
