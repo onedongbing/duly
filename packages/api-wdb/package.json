@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "netlify functions:serve",
     "link": "netlify link --name api-wdb",
-    "deploy": "netlify deploy --build --prod --dir=public --site=api-wdb"
+    "deploy": "netlify deploy --build --prod --dir=public --site=api-wdb",
+    "deploy:test": "netlify deploy --build --prod --dir=public --site=api-wdb-test"
   },
   "dependencies": {
     "@notionhq/client": "^2.2.5"

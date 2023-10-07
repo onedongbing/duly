@@ -1,10 +1,7 @@
 import type { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 import { Client } from "@notionhq/client";
 import { Response } from "@netlify/functions/dist/function/response";
-
-const notion = new Client({
-  auth: "secret_vOLCV47LEk6jpRfc3AtX9Bueg1SjO7h5ugZNZOzcnH8",
-});
+import { notionService } from "@/utils";
 
 const transformer = (page: any) => {
 	let data: any = {};
@@ -34,17 +31,13 @@ const handler: Handler = async (
   event: HandlerEvent,
   context: HandlerContext
 ) => {
-  // const pageId = "f12727affb1f4551950223f6981fb72d";
-  // const response = await notion.pages.retrieve({ page_id: pageId });
-  // console.log(response);
+
   const databaseId = "924af3e47949421d987fdd971be681da";
-  const response = await notion.databases.retrieve({ database_id: databaseId });
-  const response2 = await notion.databases.query({ database_id: databaseId });
-	const res3 = response2.results.map((item) => transformer(item))
+	const response = await notionService.query({database_id: databaseId})
+	
   return {
     statusCode: 200,
-    // body: JSON.stringify({ message: "Hello World" }),
-    body: JSON.stringify({ message: {response, response2, res3} }),
+    body: JSON.stringify({ message: {response} }),
     headers: {
       "Access-Control-Allow-Origin": "*",
     },
